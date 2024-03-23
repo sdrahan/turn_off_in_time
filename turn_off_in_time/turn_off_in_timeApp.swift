@@ -11,14 +11,16 @@ import SwiftUI
 struct turn_off_in_timeApp: App {
     
     let eventsJournal: EventsJournal
+    let eventService: EventService
     let observer: NotificationObserver
     let logicManager: LogicManager
         
     init() {
         print("App started")
-        eventsJournal = EventsJournal()
-        logicManager = LogicManager(eventsJournal: eventsJournal)
-        observer = NotificationObserver(eventsJournal: eventsJournal)
+        eventsJournal = SimpleJsonEventsJournal()
+        eventService = EventService(eventsJournal: eventsJournal)
+        logicManager = LogicManager(eventService: eventService)
+        observer = NotificationObserver(eventService: eventService)
     }
     
     var body: some Scene {
@@ -42,10 +44,10 @@ enum JournalEventType: Codable {
 }
 
 class NotificationObserver: NSObject {
-    let eventsJournal: EventsJournal
+    let eventService: EventService
     
-    init(eventsJournal: EventsJournal) {
-        self.eventsJournal = eventsJournal
+    init(eventService: EventService) {
+        self.eventService = eventService
         super.init()
         let notificationCenter = NSWorkspace.shared.notificationCenter
         notificationCenter.addObserver(self, selector: #selector(systemWillSleep), name: NSWorkspace.willSleepNotification, object: nil)
@@ -58,20 +60,20 @@ class NotificationObserver: NSObject {
         print("System will go to sleep")
         let logMessage = "\(Date()) : System will go to sleep \n"
         appendTextToFile(text: logMessage, fileName: "SystemEvents.log")
-        eventsJournal.appendEvent(time: Date.now, journalEventType: .sleep)
+        eventService.saveEvent(time: Date.now, journalEventType: .sleep)
     }
     
     @objc func systemDidWake(_ notification: Notification) {
         print("System did wake up")
         let logMessage = "\(Date()) : System did wake up \n"
         appendTextToFile(text: logMessage, fileName: "SystemEvents.log")
-        eventsJournal.appendEvent(time: Date.now, journalEventType: .wake)
+        eventService.saveEvent(time: Date.now, journalEventType: .wake)
     }
 
     @objc func systemWillPowerOff(_ notification: Notification) {
         let logMessage = "\(Date()) : System will power off \n"
         appendTextToFile(text: logMessage, fileName: "SystemEvents.log")
-        eventsJournal.appendEvent(time: Date.now, journalEventType: .powerOff)
+        eventService.saveEvent(time: Date.now, journalEventType: .powerOff)
     }
     
     func appendTextToFile(text: String, fileName: String) {
@@ -99,11 +101,29 @@ class NotificationObserver: NSObject {
 
 }
 
-class EventsJournal {
+class EventService {
+    private let eventsJournal: EventsJournal
+    
+    init (eventsJournal: EventsJournal) {
+        self.eventsJournal = eventsJournal
+    }
+    
+    public func saveEvent(time: Date, journalEventType: JournalEventType) {
+        eventsJournal.saveEvent(journalEvent: JournalEvent(time: time, type: journalEventType))
+    }
+    
+}
+
+protocol EventsJournal {
+    func saveEvent(journalEvent: JournalEvent)
+    func getEvents() -> [JournalEvent]
+}
+
+class SimpleJsonEventsJournal: EventsJournal {
     private let journalFileName = "events_journal.json"
     
-    public func appendEvent(time: Date, journalEventType: JournalEventType) {
-        let event = JournalEvent(time: time, type: journalEventType)
+    public func saveEvent(journalEvent: JournalEvent) {
+        let event = JournalEvent(time: journalEvent.time, type: journalEvent.type)
         let fileURL = getDocumentsDirectory().appendingPathComponent(journalFileName)
         
         var journalEvents: [JournalEvent] = readEvents() ?? []
@@ -115,6 +135,10 @@ class EventsJournal {
         } catch {
             print("Error writing event: \(error)")
         }
+    }
+    
+    public func getEvents() -> [JournalEvent] {
+        return [JournalEvent]()
     }
 
     func readEvents() -> [JournalEvent]? {
@@ -132,10 +156,10 @@ class EventsJournal {
 }
 
 class LogicManager {
-    private let eventsJournal: EventsJournal
-    init(eventsJournal: EventsJournal) {
-        self.eventsJournal = eventsJournal;
-        eventsJournal.appendEvent(time: Date.now, journalEventType: .appStart)
+    private let eventService: EventService
+    init(eventService: EventService) {
+        self.eventService = eventService;
+        eventService.saveEvent(time: Date.now, journalEventType: .appStart)
     }
 }
 
