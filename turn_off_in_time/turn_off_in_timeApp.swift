@@ -19,8 +19,8 @@ struct turn_off_in_timeApp: App {
         print("App started")
         eventsJournal = SimpleJsonEventsJournal()
         eventService = EventService(eventsJournal: eventsJournal)
-        logicManager = LogicManager(eventService: eventService)
         observer = NotificationObserver(eventService: eventService)
+        logicManager = LogicManager(eventService: eventService)
     }
     
     var body: some Scene {
@@ -112,6 +112,10 @@ class EventService {
         eventsJournal.saveEvent(journalEvent: JournalEvent(time: time, type: journalEventType))
     }
     
+    public func getEvents() -> [JournalEvent] {
+        return eventsJournal.getEvents()
+    }
+    
 }
 
 protocol EventsJournal {
@@ -122,7 +126,7 @@ protocol EventsJournal {
 class SimpleJsonEventsJournal: EventsJournal {
     private let journalFileName = "events_journal.json"
     
-    public func saveEvent(journalEvent: JournalEvent) {
+    func saveEvent(journalEvent: JournalEvent) {
         let event = JournalEvent(time: journalEvent.time, type: journalEvent.type)
         let fileURL = getDocumentsDirectory().appendingPathComponent(journalFileName)
         
@@ -138,7 +142,7 @@ class SimpleJsonEventsJournal: EventsJournal {
     }
     
     public func getEvents() -> [JournalEvent] {
-        return [JournalEvent]()
+        return readEvents() ?? []
     }
 
     func readEvents() -> [JournalEvent]? {
@@ -157,9 +161,49 @@ class SimpleJsonEventsJournal: EventsJournal {
 
 class LogicManager {
     private let eventService: EventService
+    
     init(eventService: EventService) {
         self.eventService = eventService;
-        eventService.saveEvent(time: Date.now, journalEventType: .appStart)
+        // eventService.saveEvent(time: Date.now, journalEventType: .appStart)
+        let events = eventService.getEvents()
+        print(events)
+        
+        // Example usage
+        let currentTime = Date.now
+        let redZoneStartTime = (hour: 22, minute: 0)
+        let redZoneEndTime = (hour: 3, minute: 0)
+
+        if isDate(currentTime, betweenStartTime: redZoneStartTime, andEndTime: redZoneEndTime) {
+            print("The current time is between \(redZoneStartTime.hour):\(redZoneStartTime.minute) and \(redZoneEndTime.hour):\(redZoneEndTime.minute).")
+        } else {
+            print("The current time is not between \(redZoneStartTime.hour):\(redZoneStartTime.minute) and \(redZoneEndTime .hour):\(redZoneEndTime.minute).")
+        }
+        
     }
+    
+    func isDate(_ date: Date, betweenStartTime startTime: (hour: Int, minute: Int), andEndTime endTime: (hour: Int, minute: Int)) -> Bool {
+        let calendar = Calendar.current
+        
+        // Extract the hour and minute components from the date
+        let components = calendar.dateComponents([.hour, .minute], from: date)
+        guard let hour = components.hour, let minute = components.minute else {
+            return false
+        }
+        
+        // Convert start and end times to minutes since midnight to simplify comparison
+        let startMinutesSinceMidnight = startTime.hour * 60 + startTime.minute
+        let endMinutesSinceMidnight = endTime.hour * 60 + endTime.minute
+        let currentMinutesSinceMidnight = hour * 60 + minute
+        
+        if startMinutesSinceMidnight <= endMinutesSinceMidnight {
+            // The time range does not cross midnight
+            return currentMinutesSinceMidnight >= startMinutesSinceMidnight && currentMinutesSinceMidnight < endMinutesSinceMidnight
+        } else {
+            // The time range crosses midnight
+            return currentMinutesSinceMidnight >= startMinutesSinceMidnight || currentMinutesSinceMidnight < endMinutesSinceMidnight
+        }
+    }
+
+    
 }
 
